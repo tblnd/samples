@@ -1,0 +1,11 @@
+[Unit]
+Description=Calendso Service Unit
+
+[Service]
+User=devops
+WorkingDirectory=/opt/calendso
+ExecStart=/bin/bash -c 'nohup yarn start > /dev/null 2>&1'
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

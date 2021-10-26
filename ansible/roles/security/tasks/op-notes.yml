@@ -1,0 +1,11 @@
+---
+- name: OP Get Password
+  onepassword_info:
+    search_terms:
+      - name: "{{ item }}"
+        field: notesPlain
+  loop: "{{ op_passwords }}"
+  become: no
+  delegate_to: localhost
+  register: secrets
+  no_log: true

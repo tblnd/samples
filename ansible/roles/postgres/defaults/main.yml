@@ -1,0 +1,13 @@
+db_name: dbname
+dp_password: dbpassword
+db_user: postgres
+pg_packages:
+  - bash
+  - openssl
+  - libssl-dev
+  - libssl-doc
+  - postgresql
+  - postgresql-contrib
+  - libpq-dev
+  - python3-psycopg2
+  - acl

@@ -1,0 +1,34 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+
+  # General Vagrant VM configuration
+  config.vm.box = "ubuntu/focal64"
+  config.ssh.insert_key = false
+
+  # VirtualBox configuration
+  config.vm.provider :virtualbox do |v|
+    v.check_guest_additions = true
+    v.memory = 4096
+    v.cpus = 2
+    v.linked_clone = true
+    end
+
+  # Test server 1
+  config.vm.define "server1" do |app|
+    app.vm.hostname = "server1"
+    app.vm.network :private_network, ip: "10.10.10.10"
+  end
+
+  # SSH Provision
+  config.vm.provision :shell, path: "files/vagrant-bootstrap.sh"
+  config.vm.provision "shell" do |s|
+    ssh_public_key = File.readlines("#{Dir.home}/.ssh/id_rsa.pub").first.strip
+    s.inline = <<-SHELL
+      mkdir /home/devops/.ssh
+      echo #{ssh_public_key} > /home/devops/.ssh/authorized_keys
+      sudo systemctl restart sshd.service
+    SHELL
+  end
+end

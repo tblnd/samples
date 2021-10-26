@@ -1,0 +1,17 @@
+[localhost]
+127.0.0.1	ansible_connection=local
+
+[dev-server]
+192.168.50.10
+
+[erp-dev]
+192.168.50.20
+
+[calendso]
+168.119.118.234
+
+[staging]
+199.247.23.48
+
+[wordpress]
+188.34.207.59

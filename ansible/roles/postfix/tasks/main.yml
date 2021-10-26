@@ -1,0 +1,62 @@
+---
+- name: Postfix packages
+  include_role:
+    name: ubuntu
+    tasks_from: install-packages
+  vars:
+    packages:
+      - postfix
+      - libsasl2-modules
+      - bsd-mailx
+
+- name: Configure relay host
+  lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^relayhost ='
+    line: relayhost = {{ domain }}:587
+
+- name: SMTP relay configs
+  blockinfile:
+    path: /etc/postfix/main.cf
+    marker: "# SMTP relay configurations"
+    marker_end: ""
+    block: |
+      smtp_sasl_auth_enable = yes
+      smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+      smtp_sasl_security_options = noanonymous
+      smtp_tls_security_level = may
+      header_size_limit = 4096000
+
+- name: SMTP credentials file
+  file:
+    path: /etc/postfix/sasl_passwd
+    state: touch
+
+- name: SMTP credentials
+  blockinfile:
+    path: /etc/postfix/sasl_passwd
+    block: |
+      {{ domain }}:587    {{ username }}:{{ password }}
+
+- name: Hash db file
+  command: postmap /etc/postfix/sasl_passwd
+
+- name: Postfix disable inbound
+  lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^inet_interfaces = all'
+    line: inet_interfaces = loopback-only
+
+- name: Restart postfix
+  systemd:
+    name: postfix
+    state: restarted
+    enabled: yes
+
+- name: Change file ownership, group and permissions
+  file:
+    path: /etc/postfix/{{ item }}
+    mode: '0600'
+  loop:
+    - sasl_passwd
+    - sasl_passwd.db

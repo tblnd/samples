@@ -1,0 +1,7 @@
+- name: Add users to group
+  become: yes
+  user:
+    name: "{{ item }}"
+    groups: "{{ new_groups }}"
+    append: yes
+  with_items: " {{ group_users }}"

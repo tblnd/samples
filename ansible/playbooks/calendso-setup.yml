@@ -1,0 +1,65 @@
+---
+- hosts: server1
+  become: yes
+
+  pre_tasks:
+    - name: Get Calendso db password
+      include_role:
+        name: security
+        tasks_from: op-labels
+      vars:
+        op_items:
+          - Calendso
+
+  tasks:
+    - name: NGINX
+      include_role:
+        name: nginx
+
+    - name: NGINX
+      include_role:
+        name: nginx
+        tasks_from: reverse-proxy
+
+    - name: nodeJS & npm
+      include_role:
+        name: nodejs
+
+    - name: nodeJS & npm
+      include_role:
+        name: nodejs
+        tasks_from: yarn
+
+    - name: PostgreSQL
+      include_role:
+        name: postgres
+
+    - name: PostgreSQL
+      include_role:
+        name: postgres
+        tasks_from: createdb
+      vars:
+        db_name: calendso
+
+    - name: PostgreSQL
+      include_role:
+        name: postgres
+        tasks_from: create-user-db-access
+      vars:
+        db_name: calendso
+        db_user: alice
+        db_password: CHANGEME
+
+    - name: Clone calendso repo in /opt
+      git:
+        repo: https://github.com/calendso/calendso.git
+        dest: /opt/calendso
+
+    - name: UFW
+      include_role:
+        name: security
+        tasks_from: ufw-allow
+      vars:
+        ufw_ports:
+          - { port: 80,  proto: tcp }
+          - { port: 443,  proto: tcp }

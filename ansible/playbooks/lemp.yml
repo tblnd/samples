@@ -1,0 +1,54 @@
+---
+- hosts: server1
+  become : yes
+
+  vars:
+    op_passwords:
+      - mysql-root
+
+  pre_tasks:
+    - name: Get 1Password Secrets
+      include_role:
+        name: security
+        tasks_from: op-password
+
+    - name: Update Package Manager
+      include_role:
+        name: ubuntu
+        tasks_from: install-packages
+
+  tasks:
+    - name: UFW Configuration
+      include_role:
+        name: security
+        tasks_from: ufw
+
+    - name: Install LEMP Stack
+      include_role:
+        name: ubuntu
+        tasks_from: install-packages
+      vars:
+        packages:
+          - nginx
+          - python3-pymysql
+          - mysql-server
+          - php-fpm
+          - php-mysql
+
+    - name: Nginx Configuration
+      include_role:
+        name: nginx
+
+    - name: MySQL Configuration
+      include_role:
+        name: mysql
+
+    - name: UFW Configuration
+      include_role:
+        name: security
+        tasks_from: ufw
+
+    - name: Nginx Configuration
+      include_role:
+        name: nginx
+        tasks_from: php-info

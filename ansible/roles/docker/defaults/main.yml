@@ -1,0 +1,18 @@
+docker_compose_version: "1.29.1"
+docker_dependencies:
+  - ca-certificates
+  - gnupg-agent
+  - python3-pip
+  - software-properties-common
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+docker_sdk_python:
+  - docker
+  - docker[tls]
+dockerhub_op:
+  - docker
+docker_users:
+  - alice
+  - bob

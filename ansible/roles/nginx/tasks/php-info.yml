@@ -1,0 +1,6 @@
+---
+- name: Set Up PHP Info Page
+  template:
+    src: "info.php.j2"
+    dest: "/var/www/html/info.php"
+  notify: Reload Nginx

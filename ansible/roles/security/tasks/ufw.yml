@@ -1,0 +1,13 @@
+---
+- name: Setup ufw
+  ufw:
+    state: enabled
+    default: reject
+    policy: deny
+    direction: incoming
+
+- name: Limit ssh
+  ufw:
+    rule: limit
+    port: ssh
+    proto: tcp

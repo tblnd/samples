@@ -1,0 +1,16 @@
+---
+- name: Cache update
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: System upgrade
+  apt:
+    upgrade: yes
+
+- name: Packages upgrade
+  apt:
+    upgrade: dist
+
+- name: Default packages
+  import_tasks: install-packages.yml

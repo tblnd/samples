@@ -1,0 +1,13 @@
+---
+- hosts: server1
+  become: yes
+
+  tasks:
+    - name: Postfix
+      include_role:
+        name: postfix
+
+    - name: Unattended-updates
+      include_role:
+        name: security
+        tasks_from: unattended-updates

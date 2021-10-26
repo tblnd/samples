@@ -1,0 +1,25 @@
+---
+- name: Install nginx
+  include_role:
+    name: ubuntu
+    tasks_from: install-packages
+  vars:
+    packages:
+      - nginx
+
+- name: Install system nginx config
+  copy:
+    src: nginx.conf
+    dest: /etc/nginx/nginx.conf
+  notify:
+    - Reload Nginx
+
+- name: Make sure nginx service unit starts on boot
+  systemd:
+    name: nginx
+    enabled: yes
+
+# - name: Remove default nginx symlink
+#   file:
+#    path: /etc/nginx/sites-enabled/default
+#    state: absent
