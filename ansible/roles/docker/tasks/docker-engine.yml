@@ -1,0 +1,37 @@
+---
+- name: Install dependencies
+  include_role:
+    name: ubuntu
+    tasks_from: install-packages
+  vars:
+    packages: "{{ docker_dependencies }}"
+
+- name: Add apt signing key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add apt repository for stable version
+  apt_repository:
+    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+    state: present
+
+- name: Installation
+  include_role:
+    name: ubuntu
+    tasks_from: install-packages
+  vars:
+    packages: "{{ docker_packages }}"
+
+- name: Add user to docker group
+  user:
+    name: "{{ item }}"
+    groups: docker
+    append: yes
+  loop: "{{ docker_users }}"
+
+- name: Docker SDK for python
+  include_role:
+    name: python
+  vars:
+    modules: "{{ docker_sdk_python }}"

@@ -1,0 +1,8 @@
+---
+op_items:
+  - 'null'
+op_passwords:
+  - 'null'
+ssh_user: alice
+ufw_ports:
+  - { port: 22,  proto: tcp }

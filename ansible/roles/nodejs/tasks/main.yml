@@ -1,0 +1,17 @@
+---
+- name: Add nodeJS apt key
+  apt_key:
+    url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+    state: present
+
+- name: Add nodeJS {{ nodejs_version }} ppa for apt repo
+  apt_repository:
+    repo: deb https://deb.nodesource.com/node_{{ nodejs_version }}.x focal main
+    update_cache: yes
+
+- name: Install Node.js and npm from Ubuntu's default repository
+  include_role:
+    name: ubuntu
+    tasks_from: install-packages
+  vars:
+    packages: "{{ nodejs_packages }}"

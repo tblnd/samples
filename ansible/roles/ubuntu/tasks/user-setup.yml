@@ -1,0 +1,26 @@
+---
+- name: Install sudo
+  include_role:
+    name: ubuntu
+    tasks_from: install-packages
+  vars:
+    packages:
+      - sudo
+
+- name: Setup sudoers permissions
+  template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/{{ user }}
+
+- name: Create a new regular user with sudo privileges
+  user:
+    name: "{{ user }}"
+    state: present
+    create_home: true
+    shell: /bin/zsh
+
+- name: Set authorized key for remote user
+  authorized_key:
+    user: "{{ user }}"
+    state: present
+    key: "{{ copy_local_key }}"

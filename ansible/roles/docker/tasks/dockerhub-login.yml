@@ -1,0 +1,13 @@
+---
+- name: 1Password
+  vars:
+    op_items: "{{ dockerhub_op }}"
+  include_role:
+    name: security
+    tasks_from: op-login
+
+- name: Docker login
+  become: no
+  docker_login:
+    username: CHANGEME
+    password: CHANGEME

@@ -1,0 +1,28 @@
+---
+- name: Unattended-upgrades packages
+  include_role:
+    name: ubuntu
+    tasks_from: install-packages
+  vars:
+    packages:
+      - unattended-upgrades
+      - update-notifier-common
+
+- name: Enable unattended-upgrades service
+  systemd:
+    name: unattended-upgrades
+    state: started
+    enabled: yes
+
+- name: Timezone
+  include_role:
+    name: ubuntu
+    tasks_from: timezone
+
+- name: Copy config files
+  copy:
+    src: "{{ item }}"
+    dest: /etc/apt/apt.conf.d/{{ item }}
+  loop:
+    - 55unattended-upgrades
+    - 20auto-upgrades

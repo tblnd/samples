@@ -1,0 +1,14 @@
+---
+- hosts: server1
+  become: yes
+
+  tasks:
+    - name: Docker Engine
+      include_role:
+        name: docker
+        tasks_from: docker-engine
+
+    - name: Docker Compose
+      include_role:
+        name: docker
+        tasks_from: docker-compose

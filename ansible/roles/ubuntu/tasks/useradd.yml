@@ -1,0 +1,27 @@
+---
+- name: Create user accounts
+  become: yes
+  user:
+    name: "{{ item.username }}"
+    uid: "{{ item.uuid }}"
+    groups: sudo
+    append: yes
+    shell: "{{ item.sh }}"
+    create_home: yes
+    state: present
+  with_items: "{{ users }}"
+
+- name: Add users to sudoers
+  become: yes
+  template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/{{ item }}
+  with_items: "{{ usernames }}"
+
+- name: Set authorized key for users
+  become: yes
+  authorized_key:
+    user: "{{ item.user }}"
+    state: present
+    key: "{{ item.public_key }}"
+  with_items: "{{ ssh_keys }}"

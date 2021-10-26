@@ -1,0 +1,12 @@
+---
+- name: Proxy setup
+  become: yes
+  copy:
+    src: reverse-proxy.conf
+    dest: /etc/nginx/sites-available/reverse-proxy.conf
+
+- name: Create a symlink for nginx proxy
+  file:
+    src: /etc/nginx/sites-available/reverse-proxy.conf
+    dest: /etc/nginx/sites-enabled/reverse-proxy.conf
+    state: link

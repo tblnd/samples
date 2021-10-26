@@ -1,0 +1,13 @@
+---
+- name: Install PostgreSQL and dependencies
+  include_role:
+    name: ubuntu
+    tasks_from: install-packages
+  vars:
+    packages: "{{ pg_packages }}"
+
+- name: Make sure postgres service unit is running and starts on boot
+  systemd:
+    name: postgresql
+    state: started
+    enabled: yes

@@ -1,0 +1,57 @@
+---
+copy_local_key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+group_users:
+  - alice
+  - bob
+new_groups: sudo
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - sudo
+  - curl
+  - git
+  - vim
+  - logrotate
+  - needrestart
+  - sshguard
+  - sysstat
+  - screen
+  - tmux
+  - tree
+  - python
+  - ioping
+  - openssl
+  - strace
+  - postfix
+  - ifup
+  - nmap
+  - netcat
+  - tcpdump
+  - traceroute
+  - iptables
+  - ufw
+  - nfs-utils
+  - npt
+  - openssh
+  - rsync
+  - scp
+  - wget
+  - ack
+  - pciutils
+  - parted
+  - cronie
+  - at
+  - htop
+  - iotop
+  - lsof
+  - timezone-data
+  - pam
+ssh_keys:
+  - { user: alice, public_key: XXX }
+  - { user: bob, public_key: XXX }
+usernames:
+  - alice
+  - bob
+users:
+  - { username: alice, uuid: 1100, sh: /bin/zsh }
+  - { username: bob, uuid: 1101, sh: /bin/zsh }

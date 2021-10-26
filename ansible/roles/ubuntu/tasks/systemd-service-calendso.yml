@@ -1,0 +1,16 @@
+---
+- name: Calendso systemd service file
+  become: yes
+  copy:
+    src: calendso.service
+    dest: /etc/systemd/system/calendso.service
+    owner: root
+    group: root
+    mode: '0777'
+
+- name: Calendso systemd service config
+  become: yes
+  service:
+    name: calendso.service
+    enabled: yes
+    state: started

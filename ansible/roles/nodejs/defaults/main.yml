@@ -1,0 +1,5 @@
+nodejs_packages:
+  - nodejs
+  - npm
+  - build-essential
+nodejs_version: 16

@@ -1,0 +1,49 @@
+---
+- name: Set ssh files ownership
+  file:
+    dest: /home/{{ ssh_user }}/.ssh
+    owner: "{{ ssh_user }}"
+    group: "{{ ssh_user }}"
+    recurse: yes
+
+- name: Disable root login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^#?PermitRootLogin'
+    line: 'PermitRootLogin no'
+
+- name: Disable password authentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^#?PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+
+- name: Disable empty password
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^#?PermitEmptyPasswords'
+    line: 'PermitEmptyPasswords no'
+
+- name: Set session timeout
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^#?ClientAliveInterval'
+    line: 'ClientAliveInterval 600'
+
+- name: Set maximum authentication attemps
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^#?MaxAuthTries'
+    line: 'MaxAuthTries 4'
+
+- name: Set maximum authentication attemps
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    state: present
+    regexp: '^#?MaxAuthTries'
+    line: 'MaxAuthTries 4'

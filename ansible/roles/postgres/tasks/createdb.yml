@@ -1,0 +1,8 @@
+---
+- name: Create the database specified in vars
+  become: true
+  become_user: "{{ db_user }}"
+  postgresql_db:
+    name: "{{ db_name }}"
+    template: template0
+    state: present
