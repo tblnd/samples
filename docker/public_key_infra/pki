@@ -1,0 +1,284 @@
+#!/bin/bash
+
+#Traceback on Error and Exit come from https://docwhat.org/tracebacks-in-bash/
+set -eu
+
+_showed_traceback=f
+
+traceback() {
+  # Hide the traceback() call.
+  local -i start=$(( ${1:-0} + 1 ))
+  local -i end=${#BASH_SOURCE[@]}
+  local -i i=0
+  local -i j=0
+
+  echo "Traceback (last called is first):" 1>&2
+  for ((i=${start}; i < ${end}; i++)); do
+    j=$(( $i - 1 ))
+    local function="${FUNCNAME[$i]}"
+    local file="${BASH_SOURCE[$i]}"
+    local line="${BASH_LINENO[$j]}"
+    echo "     ${function}() in ${file}:${line}" 1>&2
+  done
+}
+
+on_error() {
+  local _ec="$?"
+  local _cmd="${BASH_COMMAND:-unknown}"
+  traceback 1
+  _showed_traceback=t
+  echo "The command ${_cmd} exited with exit code ${_ec}." 1>&2
+}
+trap on_error ERR
+
+on_exit() {
+  local _ec="$?"
+  if [[ $_ec != 0 && "${_showed_traceback}" != t ]]; then
+    traceback 1
+  fi
+}
+trap on_exit EXIT
+
+usage() {
+  echo "Usage: pki [OPTION]... [FILES]"
+  echo
+  echo "Select single action (followed by their defaults)"
+  echo
+  echo "Keys:"
+  echo "  -R, --root-key        ca-key.pem                                   create root CA key"
+  echo "  -i, --inter-key       inter-key.pem                                create intermediate CA or OSCP key (4096-bits)"
+  echo "  -e, --ext-key         example.com-key.pem                          create external entity key (2048-bits)"
+  echo
+  echo "Certificates:"
+  echo "  -C, --root-cert       ca-key.pem ca-cert.pem                       create root CA certificate with root CA key"
+  echo "  -c, --csr             inter-key.pem inter-csr.pem                  create CSR with intermediate key"
+  echo "  -s, --sign-inter      inter-csr.pem inter-cert.pem                 sign intermediate CSR with intermediate key"
+  echo "  -v, --sign-server     example.com-csr.pem example.com-cert.pem     sign server CSR with intermediate key"
+  echo "  -u, --sign-user       email@adress-csr.pem email@adress-cert.pem   sign user CSR with intermediate key"
+  echo "  -a, --chain           inter-cert.pem ca-cert.pem ca-chain.cert.pem create chain of trust with intermediate and root certificates"
+  echo
+  echo "Validation:"
+  echo "  -F, --verify-root     ca-cert.pem                                  verify root CA certificate"
+  echo "  -f, --verify-cert     inter-cert.pem                               verify non-root certificate"
+  echo "  -D, --validate-inter  ca-cert.pem inter-cert.pem                   validate intermediate certificate against the root certificate"
+  echo "  -d, --validate-ext    ca-chain.cert.pem example.com-cert.pem       validate external entity certificate against chain of trust"
+  echo
+  echo "Certificate Revocation Lists:"
+  echo "  -r, --revoke          email@adress-cert.pem                        revoke intermediate certificates"
+  echo "  -l, --crl             inter-crl.pem                                create CRL"
+  echo "  -L, --check-crl       inter-crl.pem                                check details of CRL"
+}
+
+if [ "$#" -lt 1 ]; then
+    usage
+    exit 0
+fi
+
+generate_root_ca_key() {
+  ROOT_KEY_NAME="root-key.pem" && [ $# -eq 2 ] && ROOT_KEY_NAME="$2"
+  openssl genrsa -aes256 -out $HOME/private/$ROOT_KEY_NAME 4096
+  chmod 600 $HOME/private/$ROOT_KEY_NAME
+  echo $HOME/private/$ROOT_KEY_NAME
+}
+
+generate_intermediate_ca_key() {
+  INTER_KEY_NAME="inter-key.pem" && [ $# -eq 2 ] && INTER_KEY_NAME="$2"
+  openssl genrsa -aes256 \
+      -out $HOME/intermediate/private/$INTER_KEY_NAME 4096
+  chmod 600 $HOME/intermediate/private/$INTER_KEY_NAME
+  echo $HOME/intermediate/private/$INTER_KEY_NAME
+}
+
+generate_external_key() {
+  EXT_KEY_NAME="example.com-key.pem" && [ $# -eq 2 ] && EXT_KEY_NAME="$2"
+  openssl genrsa \
+      -out $HOME/intermediate/private/$EXT_KEY_NAME 2048
+  chmod 600 $HOME/intermediate/private/$EXT_KEY_NAME
+  echo $HOME/intermediate/private/$EXT_KEY_NAME
+}
+
+generate_root_ca_certificate() {
+  ROOT_KEY_NAME="ca-key.pem" && [ $# -gt 1 ] && [ $# -le 3 ] && ROOT_KEY_NAME="$2"
+  ROOT_CERT_NAME="ca-cert.pem" && [ $# -eq 3 ] && ROOT_CERT_NAME="$3"
+  openssl req -config $HOME/root-openssl.cnf \
+      -key $HOME/private/$ROOT_KEY_NAME \
+      -new -x509 -days 7300 -sha256 -extensions v3_ca \
+      -out $HOME/certs/$ROOT_CERT_NAME
+  chmod 644 $HOME/certs/$ROOT_CERT_NAME
+  echo $HOME/certs/$ROOT_CERT_NAME
+}
+
+generate_certificate_signing_request() {
+  INTER_KEY_NAME="inter-key.pem" && [ $# -gt 1 ] && [ $# -le 3 ] && INTER_KEY_NAME="$2"
+  INTER_CSR_NAME="inter-csr.pem" && [ $# -eq 3 ] && INTER_CSR_NAME="$3"
+  openssl req -config $HOME/intermediate/intermediate-openssl.cnf -new -sha256 \
+      -key $HOME/intermediate/private/$INTER_KEY_NAME \
+      -out $HOME/intermediate/csr/$INTER_CSR_NAME
+  echo $HOME/intermediate/csr/$INTER_CSR_NAME
+}
+
+sign_intermediate_request() {
+  INTER_CSR_NAME="inter-csr.pem" && [ $# -gt 1 ] && [ $# -le 3 ] && INTER_CSR_NAME="$2"
+  INTER_CERT_NAME="inter-cert.pem" && [ $# -eq 3 ] && INTER_CERT_NAME="$3"
+  openssl ca -config $HOME/root-openssl.cnf -extensions v3_intermediate_ca \
+      -days 3650 -notext -md sha256 \
+      -in $HOME/intermediate/csr/$INTER_CSR_NAME \
+      -out $HOME/intermediate/certs/$INTER_CERT_NAME
+  chmod 644 $HOME/intermediate/certs/$INTER_CERT_NAME
+  echo $HOME/intermediate/certs/$INTER_CERT_NAME
+}
+
+sign_server_request() {
+  SERVER_CSR_NAME="example.com-csr.pem" && [ $# -gt 1 ] && [ $# -le 3 ] && SERVER_CSR_NAME="$2"
+  SERVER_CERT_NAME="example.com-cert.pem" && [ $# -eq 3 ] && SERVER_CERT_NAME="$3"
+  openssl ca -config $HOME/intermediate/intermediate-openssl.cnf \
+      -extensions server_cert -days 375 -notext -md sha256 \
+      -in $HOME/intermediate/csr/$SERVER_CSR_NAME \
+      -out $HOME/intermediate/certs/$SERVER_CERT_NAME
+  chmod 644 $HOME/intermediate/certs/$SERVER_CERT_NAME
+  echo $HOME/intermediate/certs/$SERVER_CERT_NAME
+}
+
+sign_user_request() {
+  USER_CSR_NAME="email@adress-csr.pem" && [ $# -gt 1 ] && [ $# -le 3 ] && USER_CSR_NAME="$2"
+  USER_CERT_NAME="email@adress-cert.pem" && [ $# -eq 3 ] && USER_CERT_NAME="$3"
+  openssl ca -config $HOME/intermediate/intermediate-openssl.cnf \
+      -extensions usr_cert -days 375 -notext -md sha256 \
+      -in $HOME/intermediate/csr/$USER_CSR_NAME \
+      -out $HOME/intermediate/certs/$USER_CERT_NAME
+  chmod 644 $HOME/intermediate/certs/$USER_CERT_NAME
+  echo $HOME/intermediate/certs/$USER_CERT_NAME
+}
+
+chain_of_trust() {
+  INTER_CERT_NAME="inter-cert.pem" && [ $# -gt 1 ] && [ $# -le 4 ] && INTER_CERT_NAME="$2"
+  ROOT_CERT_NAME="ca-cert.pem" && [ $# -gt 2 ] && [ $# -le 4 ] && ROOT_CERT_NAME="$3"
+  CHAIN_NAME="ca-chain.cert.pem" && [ $# -eq 4 ] && CHAIN_NAME="$4"
+  cat $HOME/intermediate/certs/$INTER_CERT_NAME \
+      $HOME/certs/$ROOT_CERT_NAME > $HOME/intermediate/certs/$CHAIN_NAME
+  chmod 644 $HOME/intermediate/certs/$CHAIN_NAME
+  echo $HOME/intermediate/certs/$CHAIN_NAME
+}
+
+verify_root_certificate() {
+  ROOT_CERT_NAME="ca-cert.pem" && [ $# -eq 2 ] && ROOT_CERT_NAME="$2"
+  openssl x509 -noout -text -in $HOME/certs/$ROOT_CERT_NAME
+}
+
+verify_intermediate_certificate() {
+  INTER_CERT_NAME="inter-cert.pem" && [ $# -eq 2 ] && INTER_CERT_NAME="$2"
+  openssl x509 -noout -text -in $HOME/intermediate/certs/$INTER_CERT_NAME
+}
+
+validate_intermediate_root() {
+  ROOT_CERT_NAME="ca-cert.pem" && [ $# -gt 1 ] && [ $# -le 3 ] &&  ROOT_CERT_NAME="$2"
+  INTER_CERT_NAME="inter-cert.pem" && [ $# -eq 3 ] && INTER_CERT_NAME="$3"
+  openssl verify -CAfile $HOME/certs/$ROOT_CERT_NAME \
+      $HOME/intermediate/certs/$INTER_CERT_NAME
+}
+
+validate_external_chain() {
+  CHAIN_NAME="ca-chain.cert.pem" && [ $# -gt 1 ] && [ $# -le 3 ] && CHAIN_NAME="$2"
+  EXT_CERT_NAME="example.com-cert.pem" && [ $# -eq 3 ] && EXT_CERT_NAME="$3"
+  openssl verify -CAfile $HOME/intermediate/certs/$CHAIN_NAME \
+      $HOME/intermediate/certs/$EXT_CERT_NAME
+}
+
+certificate_revocation_list() {
+  CRL_NAME="inter-crl.pem" && [ $# -eq 2 ] && CRL_NAME="$2"
+  openssl ca -config $HOME/intermediate/intermediate-openssl.cnf \
+        -gencrl -out $HOME/intermediate/crl/$CRL_NAME
+  echo $HOME/intermediate/crl/$CRL_NAME
+}
+
+check_crl() {
+  CRL_NAME="inter-crl.pem" && [ $# -eq 2 ] && CRL_NAME="$2"
+  openssl crl -in $HOME/intermediate/crl/$CRL_NAME -noout -text
+}
+
+revoke() {
+  INTER_CERT_NAME="inter-cert.pem" && [ $# -eq 2 ] && INTER_CERT_NAME="$2"
+  openssl ca -config $HOME/intermediate/openssl.cnf \
+      -revoke $HOME/intermediate/certs/$INTER_CERT_NAME
+  echo $HOME/intermediate/certs/$INTER_CERT_NAME
+}
+
+set -e
+
+ARGS=$@
+
+case "$1" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  -R|--root-key)
+    generate_root_ca_key $ARGS
+    exit 0
+    ;;
+  -i|--inter-key)
+    generate_intermediate_ca_key $ARGS
+    exit 0
+    ;;
+  -e|--ext-key)
+    generate_external_key $ARGS
+    exit 0
+    ;;
+  -C|--root-cert)
+    generate_root_ca_certificate $ARGS
+    exit 0
+    ;;
+  -c|--csr)
+    generate_certificate_signing_request $ARGS
+    exit 0
+    ;;
+  -s|--sign-inter)
+    sign_intermediate_request $ARGS
+    exit 0
+    ;;
+  -v|--sign-server)
+    sign_server_request $ARGS
+    exit 0
+    ;;
+  -u|--sign-user)
+    sign_user_request $ARGS
+    exit 0
+    ;;
+  -a|--chain)
+    chain_of_trust $ARGS
+    exit 0
+    ;;
+  -F|--verify-root)
+    verify_root_certificate $ARGS
+    exit 0
+    ;;
+  -f|--verify-cert)
+    verify_intermediate_certificate $ARGS
+    exit 0
+    ;;
+  -D|--validate-inter)
+    validate_intermediate_root $ARGS
+    exit 0
+    ;;
+  -d|--validate-ext)
+    validate_external_chain $ARGS
+    exit 0
+    ;;
+  -r|--revoke)
+    revoke $ARGS
+    exit 0
+    ;;
+  -l|--crl)
+    certificate_revocation_list $ARGS
+    exit 0
+    ;;
+  -L|--check-crl)
+    check_crl $ARGS
+    exit 0
+    ;;
+  -*|--*) # unsupported flags
+    echo "Unsupported flag"
+    echo
+    usage
+    exit 0
+esac

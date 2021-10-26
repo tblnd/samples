@@ -1,0 +1,228 @@
+version: '3.7'
+
+services:
+
+## Docker socket proxy
+  dockerproxy:
+    environment:
+      AUTH: 1
+      BUILD: 0
+      COMMIT: 0
+      CONFIGS: 0
+      CONTAINERS: 1
+      DISTRIBUTION: 0
+      EVENTS: 1
+      EXEC: 0
+      IMAGES: 0
+      INFO: 0
+      NETWORKS: 1
+      NODES: 0
+      PING: 1
+      PLUGINS: 0
+      POST: 0
+      SECRETS: 0
+      SERVICES: 0
+      SESSION: 1
+      SWARM: 0
+      SYSTEM: 0
+      TASKS: 0
+      VERSION: 1
+      VOLUMES: 0
+    image: tecnativa/docker-socket-proxy
+    container_name: socketproxy
+    restart: always
+    networks:
+      - traefik
+    ports:
+      - 127.0.0.1:2375:2375
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+## Services reverse proxy
+  traefik:
+    depends_on:
+      - dockerproxy
+    security_opt:
+      - no-new-privileges:true
+    image: traefik
+    container_name: traefik
+    ports:
+      - 80:80
+      - 443:443
+    restart: always
+    command:
+      - --providers.docker=true
+      - --providers.docker.endpoint=tcp://dockerproxy:2375
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=traefik
+      - --log.level=ERROR
+      - --log.filepath=/etc/traefik/traefik.log
+      - --log.format=json
+      - --api.dashboard=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.email=[EMAIL ADDRESS] # Update email address
+      - --certificatesresolvers.le.acme.storage=/etc/traefik/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.le.acme.preferredChain="ISRG Root X1"
+      - --certificatesresolvers.le.acme.keyType="RSA4096"
+    networks:
+      - nextcloudnet
+      - traefik
+    volumes:
+      - cert-vol:/letsencrypt
+      - /opt/traefik/tls-options.yml:/etc/traefik/tls-options.yml:ro
+      - /opt/traefik/acme.json:/etc/traefik/acme.json:rw
+      - /opt/traefik/traefik.log:/etc/traefik/traefik.log:rw
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard-http.entrypoints=web"
+      - "traefik.http.routers.dashboard-http.rule=Host(`${TRAEFIK_DASHBOARD_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard-http.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.routers.dashboard-https.entrypoints=websecure"
+      - "traefik.http.routers.dashboard-https.rule=Host(`${TRAEFIK_DASHBOARD_DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard-https.service=api@internal"
+      - "traefik.http.routers.dashboard-https.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_USERNAME}:${TRAEFIK_DASHBOARD_HTPASSWD}"
+      - "traefik.http.routers.dashboard-https.tls=true"
+      - "traefik.http.routers.dashboard-https.tls.certresolver=le"
+      - "traefik.http.middlewares.security-headers.headers.sslredirect=true"
+      - "traefik.http.middlewares.security-headers.headers.framedeny=true"
+      - "traefik.http.middlewares.security-headers.headers.stsincludesubdomains=true"
+      - "traefik.http.middlewares.security-headers.headers.stspreload=true"
+      - "traefik.http.middlewares.security-headers.headers.stsseconds=63072000"
+      - "traefik.http.middlewares.security-headers.headers.browserxssfilter=true"
+      - "traefik.http.middlewares.security-headers.headers.contenttypenosniff=true"
+      - "traefik.http.middlewares.security-headers.headers.accesscontrolallowmethods=GET,POST"
+      - "traefik.http.middlewares.security-headers.headers.accesscontrolalloworiginlist=*.[DOMAIN]" # Update domain
+      - "traefik.http.middlewares.security-headers.headers.accesscontrolmaxage=100"
+      - "traefik.http.middlewares.security-headers.headers.addvaryheader=true"
+      - "traefik.http.middlewares.security-headers.headers.referrerpolicy=origin-when-cross-origin"
+      - "traefik.http.middlewares.security-headers.headers.customframeoptionsvalue=SAMEORIGIN"
+      - "traefik.http.routers.dashboard-https.middlewares=security-headers@docker"
+      - "--providers.file.filename=/etc/traefik/tls-options.yml"
+    userns_mode: "host"
+
+## Nextcloud
+  nextcloud-db:
+    image: mariadb:10.5
+    container_name: nextcloud-db
+    command: --transaction-isolation=READ-COMMITTED --log-bin=ROW --innodb-read-only-compressed=OFF
+    restart: always
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - nextcloud-db:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD_NEXTCLOUD}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD_NEXTCLOUD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE_NEXTCLOUD}
+      - MYSQL_USER=${MYSQL_USER_NEXTCLOUD}
+      - MYSQL_INITDB_SKIP_TZINFO=1
+    networks:
+      - nextcloudnet
+
+  nextcloud-redis:
+    image: redis:alpine
+    container_name: nextcloud-redis
+    hostname: nextcloud-redis
+    restart: always
+    command: redis-server --requirepass ${REDIS_HOST_PASSWORD_NEXTCLOUD}
+    networks:
+        - nextcloudnet
+
+  nextcloud-app:
+    depends_on:
+      - traefik
+      - nextcloud-db
+      - nextcloud-redis
+    image: nextcloud:22
+    container_name: nextcloud-app
+    hostname: HOSTNAME # Update hostname
+    restart: always
+    environment:
+        NEXTCLOUD_TRUSTED_DOMAINS: [URL] # Update URL
+        TRUSTED_PROXIES: 192.168.100.0/24 # Update trusted proxy
+        REDIS_HOST: nextcloud-redis
+        REDIS_HOST_PASSWORD: ${REDIS_HOST_PASSWORD_NEXTCLOUD}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - nextcloud-app:/var/www/html
+      - nextcloud-data:/var/www/html/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.nextcloud-http.entrypoints=web"
+      - "traefik.http.routers.nextcloud-http.rule=Host(`${NEXTCLOUD_DOMAIN}`)"
+      - "traefik.http.routers.nextcloud-http.middlewares=redirect-to-https@docker"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.routers.nextcloud-https.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud-https.rule=Host(`${NEXTCLOUD_DOMAIN}`)"
+      - "traefik.http.routers.nextcloud-https.tls=true"
+      - "traefik.http.routers.nextcloud-https.tls.certresolver=le"
+      - "traefik.http.routers.nextcloud-https.service=nextcloud"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+      - "traefik.http.routers.nextcloud-https.middlewares=security-headers@docker"
+      - "--providers.file.filename=/etc/traefik/tls-options.yml"
+      - "traefik.http.routers.nextcloud-https.middlewares=nextcloud-caldav@docker"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.permanent=true"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.regex=^https://(.*)/.well-known/(card|cal)dav"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.replacement=https://$${1}/remote.php/dav/"
+    networks:
+      - nextcloudnet
+      - traefik
+
+  collabora-app:
+    image: collabora/code
+    container_name: collabora-app
+    cap_add:
+      - MKNOD # allow creation of special or ordinary files
+      - CAP_SYS_ADMIN # allow mount() system call
+    expose:
+      - 9980
+    environment:
+      - domain=${NEXTCLOUD_DOMAIN}
+      - username=${COLLABORA_USERNAME}
+      - password=${COLLABORA_PASSWORD}
+      - server_name=${COLLABORA_DOMAIN}
+      - "extra_params=--o:ssl.enable=false --o:ssl.termination=true"
+    restart: always
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.collabora-http.entrypoints=web"
+      - "traefik.http.routers.collabora-http.rule=Host(`${COLLABORA_DOMAIN}`)"
+      - "traefik.http.routers.collabora-http.middlewares=redirect-to-https@docker"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.routers.collabora-https.entrypoints=websecure"
+      - "traefik.http.routers.collabora-https.rule=Host(`${COLLABORA_DOMAIN}`)"
+      - "traefik.http.routers.collabora-https.tls=true"
+      - "traefik.http.routers.collabora-https.tls.certresolver=le"
+      - "traefik.http.routers.collabora-https.service=collabora"
+      - "traefik.http.services.collabora.loadbalancer.server.port=9980"
+      - "traefik.http.routers.collabora-https.middlewares=security-headers@docker"
+      - "--providers.file.filename=/etc/traefik/tls-options.yml"
+    networks:
+      - nextcloudnet
+
+networks:
+  nextcloudnet:
+    name: nextcloudnet
+    driver: bridge
+  traefik:
+    name: traefik
+    driver: bridge
+    internal: true
+
+volumes:
+  cert-vol:
+  nextcloud-apps:
+  nextcloud-data:
+  nextcloud-db:
